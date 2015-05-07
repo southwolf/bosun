@@ -28,9 +28,9 @@ import (
 )
 
 var (
-	templates *template.Template
-	router    = mux.NewRouter()
-	schedule  = sched.DefaultSched
+	indexTemplate func() *template.Template
+	router        = mux.NewRouter()
+	schedule      = sched.DefaultSched
 )
 
 const (
@@ -52,23 +52,35 @@ func init() {
 }
 
 func Listen(listenAddr string, devMode bool, tsdbHost string) error {
-	var err error
-	webFS := FS(devMode)
 	if devMode {
 		log.Println("using local web assets")
 	}
-	index, err := webFS.Open("/templates/index.html")
-	if err != nil {
-		log.Fatal(err)
+	webFS := FS(devMode)
+
+	var parseTemplates = func() *template.Template {
+		index, err := webFS.Open("/templates/index.html")
+		if err != nil {
+			log.Fatal(err)
+		}
+		b, err := ioutil.ReadAll(index)
+		if err != nil {
+			log.Fatal(err)
+		}
+		templates, err := template.New("").Parse(string(b))
+		if err != nil {
+			log.Fatal(err)
+		}
+		return templates
 	}
-	b, err := ioutil.ReadAll(index)
-	if err != nil {
-		log.Fatal(err)
+	if devMode {
+		indexTemplate = parseTemplates
+	} else {
+		indexTmpl := parseTemplates()
+		indexTemplate = func() *template.Template {
+			return indexTmpl
+		}
 	}
-	templates, err = template.New("").Parse(string(b))
-	if err != nil {
-		log.Fatal(err)
-	}
+
 	if tsdbHost != "" {
 		router.HandleFunc("/api/index", IndexTSDB)
 		router.Handle("/api/put", Relay(tsdbHost))
@@ -203,7 +215,7 @@ func Index(t miniprofiler.Timer, w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	err := templates.Execute(w, struct {
+	err := indexTemplate().Execute(w, struct {
 		Includes template.HTML
 	}{
 		t.Includes(),
