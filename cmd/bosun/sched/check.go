@@ -111,7 +111,20 @@ func (s *Schedule) RunHistory(r *RunHistory) {
 		if event.Unevaluated {
 			continue
 		}
+		prev := state.Last()
 		state.Append(event)
+		if prev.IncidentId != 0 {
+			//if last event has incident id and is not closed, we continue it.
+			s.incidentLock.Lock()
+			if incident, ok := s.Incidents[prev.IncidentId]; ok && incident.End.IsZero() {
+				event.IncidentId = prev.IncidentId
+			}
+			s.incidentLock.Unlock()
+		} else if event.Status != StNormal {
+			//otherwise create new incident on first non-normal event
+			event.IncidentId = s.createIncident(ak, event.Time).Id
+		}
+
 		a := s.Conf.Alerts[ak.Name()]
 		wasOpen := state.Open
 		if event.Status > StNormal {
