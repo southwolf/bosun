@@ -728,9 +728,6 @@ type Incident struct {
 func (s *Schedule) createIncident(ak expr.AlertKey, start time.Time) *Incident {
 	s.incidentLock.Lock()
 	defer s.incidentLock.Unlock()
-	if s.Incidents == nil {
-		s.Incidents = map[uint64]*Incident{}
-	}
 	s.maxIncidentId++
 	id := s.maxIncidentId
 	incident := &Incident{
@@ -750,13 +747,13 @@ func (i incidentList) Less(a int, b int) bool {
 	if i[a].Start.Before(i[b].Start) {
 		return true
 	}
-	return string(i[a].AlertKey) < string(i[b].AlertKey)
+	return i[a].AlertKey < i[b].AlertKey
 }
 func (i incidentList) Swap(a int, b int) { i[a], i[b] = i[b], i[a] }
 
 func (s *Schedule) createHistoricIncidents() {
-	incidents := incidentList{}
-	indexes := map[*Incident]int{}
+	incidents := make(incidentList, 0)
+	indexes := make(map[*Incident]int)
 	s.Incidents = make(map[uint64]*Incident)
 	// 1. Create all incidents, but don't assign ids or link events yet.
 	for ak, state := range s.status {
@@ -764,21 +761,21 @@ func (s *Schedule) createHistoricIncidents() {
 		for i, ev := range state.History {
 			if currentIncident != nil {
 				if currentIncident.End.IsZero() || ev.Time.Before(currentIncident.End) {
-					// continue open incident
+					// Continue open incident
 					continue
 				} else {
-					// end incident after end time
+					// End incident after end time
 					currentIncident = nil
 				}
 			}
 			if ev.Status == StNormal {
 				continue
 			}
-			// new incident
+			// New incident
 			currentIncident = &Incident{AlertKey: ak, Start: ev.Time}
 			indexes[currentIncident] = i
 			incidents = append(incidents, currentIncident)
-			// find end time for incident
+			// Find end time for incident
 			for _, action := range state.Actions {
 				if action.Type == ActionClose && action.Time.After(ev.Time) {
 					currentIncident.End = action.Time
@@ -793,7 +790,7 @@ func (s *Schedule) createHistoricIncidents() {
 	for _, incident := range incidents {
 		s.maxIncidentId++
 		incident.Id = s.maxIncidentId
-		//find events and mark them
+		// Find events and mark them
 		state := s.status[incident.AlertKey]
 		for idx := indexes[incident]; idx < len(state.History); idx++ {
 			ev := state.History[idx]

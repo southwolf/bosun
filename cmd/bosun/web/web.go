@@ -375,19 +375,17 @@ func Incidents(t miniprofiler.Timer, w http.ResponseWriter, r *http.Request) (in
 
 	if from := r.FormValue("from"); from != "" {
 		t, err := time.Parse(tsdbFormatSecs, from)
-		if err == nil {
-			fromTime = t
-		} else {
+		if err != nil {
 			return nil, err
 		}
+		fromTime = t
 	}
 	if to := r.FormValue("to"); to != "" {
 		t, err := time.Parse(tsdbFormatSecs, to)
-		if err == nil {
-			toTime = t
-		} else {
+		if err != nil {
 			return nil, err
 		}
+		toTime = t
 	}
 	incidents := schedule.GetIncidents(alert, fromTime, toTime)
 	maxIncidents := 200
