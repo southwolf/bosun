@@ -363,8 +363,8 @@ func IncidentEvents(t miniprofiler.Timer, w http.ResponseWriter, r *http.Request
 	}
 	return struct {
 		Incident *sched.Incident
-		Events   []*sched.Event
-		Actions  []*sched.Action
+		Events   []sched.Event
+		Actions  []sched.Action
 	}{incident, events, actions}, nil
 }
 

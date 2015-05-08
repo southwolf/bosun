@@ -821,14 +821,14 @@ func (s *Schedule) GetIncidents(alert string, from, to time.Time) []*Incident {
 	return list
 }
 
-func (s *Schedule) GetIncidentEvents(id uint64) (*Incident, []*Event, []*Action, error) {
+func (s *Schedule) GetIncidentEvents(id uint64) (*Incident, []Event, []Action, error) {
 	s.incidentLock.Lock()
 	incident, ok := s.Incidents[id]
 	s.incidentLock.Unlock()
 	if !ok {
 		return nil, nil, nil, fmt.Errorf("incident %d not found", id)
 	}
-	list := []*Event{}
+	list := []Event{}
 	state := s.GetStatus(incident.AlertKey)
 	if state == nil {
 		return incident, list, nil, nil
@@ -837,16 +837,15 @@ func (s *Schedule) GetIncidentEvents(id uint64) (*Incident, []*Event, []*Action,
 	for _, e := range state.History {
 		if e.IncidentId == id {
 			found = true
-			list = append(list, &e)
+			list = append(list, e)
 		} else if found {
 			break
 		}
 	}
-	actions := []*Action{}
+	actions := []Action{}
 	for _, a := range state.Actions {
-		action := a
 		if a.Time.After(incident.Start) && (incident.End == nil || a.Time.Before(*incident.End) || a.Time.Equal(*incident.End)) {
-			actions = append(actions, &action)
+			actions = append(actions, a)
 		}
 	}
 	return incident, list, actions, nil
