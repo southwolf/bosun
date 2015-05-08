@@ -490,7 +490,7 @@ type State struct {
 	*Result
 
 	// Most recent last.
-	History      []*Event `json:",omitempty"`
+	History      []Event  `json:",omitempty"`
 	Actions      []Action `json:",omitempty"`
 	Touched      time.Time
 	Alert        string // helper data since AlertKeys don't serialize to JSON well
@@ -519,7 +519,7 @@ func (s *State) Status() Status {
 func (s *State) AbnormalEvent() *Event {
 	for i := len(s.History) - 1; i >= 0; i-- {
 		if ev := s.History[i]; ev.Status > StNormal {
-			return ev
+			return &ev
 		}
 	}
 	return nil
@@ -585,7 +585,8 @@ func (s *Schedule) Action(user, message string, t ActionType, ak expr.AlertKey) 
 		if last.IncidentId != 0 {
 			s.incidentLock.Lock()
 			if incident, ok := s.Incidents[last.IncidentId]; ok {
-				incident.End = time.Now().UTC()
+				end := time.Now().UTC().Add(1 * time.Second) // 1 second in future so close action will still be in window.
+				incident.End = &end
 			}
 			s.incidentLock.Unlock()
 		}
@@ -621,8 +622,7 @@ func (s *State) Touch() {
 func (s *State) Append(event *Event) Status {
 	last := s.Last()
 	if len(s.History) == 0 || last.Status != event.Status {
-		event.Time = time.Now().UTC()
-		s.History = append(s.History, event)
+		s.History = append(s.History, *event)
 	}
 	return last.Status
 }
@@ -631,7 +631,7 @@ func (s *State) Last() *Event {
 	if len(s.History) == 0 {
 		return &Event{}
 	}
-	return s.History[len(s.History)-1]
+	return &s.History[len(s.History)-1]
 }
 
 type Event struct {
@@ -721,7 +721,7 @@ func (a ActionType) MarshalJSON() ([]byte, error) {
 type Incident struct {
 	Id       uint64
 	Start    time.Time
-	End      time.Time
+	End      *time.Time
 	AlertKey expr.AlertKey
 }
 
@@ -760,7 +760,7 @@ func (s *Schedule) createHistoricIncidents() {
 		var currentIncident *Incident
 		for i, ev := range state.History {
 			if currentIncident != nil {
-				if currentIncident.End.IsZero() || ev.Time.Before(currentIncident.End) {
+				if currentIncident.End == nil || ev.Time.Before(*currentIncident.End) {
 					// Continue open incident
 					continue
 				} else {
@@ -778,7 +778,8 @@ func (s *Schedule) createHistoricIncidents() {
 			// Find end time for incident
 			for _, action := range state.Actions {
 				if action.Type == ActionClose && action.Time.After(ev.Time) {
-					currentIncident.End = action.Time
+					end := action.Time
+					currentIncident.End = &end
 					break
 				}
 			}
@@ -794,8 +795,9 @@ func (s *Schedule) createHistoricIncidents() {
 		state := s.status[incident.AlertKey]
 		for idx := indexes[incident]; idx < len(state.History); idx++ {
 			ev := state.History[idx]
-			if incident.End.IsZero() || ev.Time.Before(incident.End) {
+			if incident.End == nil || ev.Time.Before(*incident.End) {
 				ev.IncidentId = incident.Id
+				state.History[idx] = ev
 			} else {
 				break
 			}
@@ -835,17 +837,19 @@ func (s *Schedule) GetIncidentEvents(id uint64) (*Incident, []*Event, []*Action,
 	for _, e := range state.History {
 		if e.IncidentId == id {
 			found = true
-			list = append(list, e)
+			list = append(list, &e)
 		} else if found {
 			break
 		}
 	}
 	actions := []*Action{}
 	for _, a := range state.Actions {
-		if a.Time.After(incident.Start) && (incident.End.IsZero() || a.Time.Before(incident.End)) {
-			actions = append(actions, &a)
+		action := a
+		if a.Time.After(incident.Start) && (incident.End == nil || a.Time.Before(*incident.End)) {
+			actions = append(actions, &action)
 		}
 	}
+	fmt.Println(len(actions), incident.Start, incident.End)
 	return incident, list, actions, nil
 }
 

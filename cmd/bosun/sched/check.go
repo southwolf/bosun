@@ -112,11 +112,11 @@ func (s *Schedule) RunHistory(r *RunHistory) {
 			continue
 		}
 		prev := state.Last()
-		state.Append(event)
+		event.Time = time.Now().UTC()
 		if prev.IncidentId != 0 {
 			// If last event has incident id and is not closed, we continue it.
 			s.incidentLock.Lock()
-			if incident, ok := s.Incidents[prev.IncidentId]; ok && incident.End.IsZero() {
+			if incident, ok := s.Incidents[prev.IncidentId]; ok && incident.End != nil {
 				event.IncidentId = prev.IncidentId
 			}
 			s.incidentLock.Unlock()
@@ -124,6 +124,7 @@ func (s *Schedule) RunHistory(r *RunHistory) {
 			// Otherwise, create new incident on first non-normal event.
 			event.IncidentId = s.createIncident(ak, event.Time).Id
 		}
+		state.Append(event)
 
 		a := s.Conf.Alerts[ak.Name()]
 		wasOpen := state.Open
@@ -202,7 +203,6 @@ func (s *Schedule) RunHistory(r *RunHistory) {
 			state.NeedAck = false
 			delete(s.Notifications, ak)
 		}
-
 		// last could be StNone if it is new. Set it to normal if so because StNormal >
 		// StNone. If the state is not open (closed), then the last state we care about
 		// isn't the last abnormal state, it's just normal.

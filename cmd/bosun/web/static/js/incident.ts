@@ -15,9 +15,6 @@ bosunControllers.controller('IncidentCtrl', ['$scope', '$http', '$location', '$r
 	$http.get('/api/incidents/events?id='+id)
 		.success((data) => {
 			$scope.incident = data.Incident;
-			if (moment($scope.incident.End).year() == 0) {
-				$scope.incident.End = null;
-			}
 			$scope.events = data.Events;
 			$scope.actions = data.Actions;
 		})
