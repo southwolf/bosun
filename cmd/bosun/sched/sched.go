@@ -627,11 +627,11 @@ func (s *State) Append(event *Event) Status {
 	return last.Status
 }
 
-func (s *State) Last() *Event {
+func (s *State) Last() Event {
 	if len(s.History) == 0 {
-		return &Event{}
+		return Event{}
 	}
-	return &s.History[len(s.History)-1]
+	return s.History[len(s.History)-1]
 }
 
 type Event struct {
