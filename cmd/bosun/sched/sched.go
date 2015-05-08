@@ -539,12 +539,12 @@ func (s *State) IsActive() bool {
 	return s.Status() > StNormal
 }
 
-func (s *State) Action(user, message string, t ActionType) {
+func (s *State) Action(user, message string, t ActionType, timestamp time.Time) {
 	s.Actions = append(s.Actions, Action{
 		User:    user,
 		Message: message,
 		Type:    t,
-		Time:    time.Now().UTC(),
+		Time:    timestamp,
 	})
 }
 
@@ -564,6 +564,7 @@ func (s *Schedule) Action(user, message string, t ActionType, ak expr.AlertKey) 
 	}
 	isUnknown := st.AbnormalStatus() == StUnknown
 	isError := st.AbnormalStatus() == StError
+	timestamp := time.Now().UTC()
 	switch t {
 	case ActionAcknowledge:
 		if !st.NeedAck {
@@ -585,8 +586,7 @@ func (s *Schedule) Action(user, message string, t ActionType, ak expr.AlertKey) 
 		if last.IncidentId != 0 {
 			s.incidentLock.Lock()
 			if incident, ok := s.Incidents[last.IncidentId]; ok {
-				end := time.Now().UTC().Add(1 * time.Second) // 1 second in future so close action will still be in window.
-				incident.End = &end
+				incident.End = &timestamp
 			}
 			s.incidentLock.Unlock()
 		}
@@ -603,7 +603,7 @@ func (s *Schedule) Action(user, message string, t ActionType, ak expr.AlertKey) 
 	default:
 		return fmt.Errorf("unknown action type: %v", t)
 	}
-	st.Action(user, message, t)
+	st.Action(user, message, t, timestamp)
 	// Would like to also track the alert group, but I believe this is impossible because any character
 	// that could be used as a delimiter could also be a valid tag key or tag value character
 	if err := collect.Add("actions", opentsdb.TagSet{"user": user, "alert": ak.Name(), "type": t.String()}, 1); err != nil {
@@ -845,11 +845,10 @@ func (s *Schedule) GetIncidentEvents(id uint64) (*Incident, []*Event, []*Action,
 	actions := []*Action{}
 	for _, a := range state.Actions {
 		action := a
-		if a.Time.After(incident.Start) && (incident.End == nil || a.Time.Before(*incident.End)) {
+		if a.Time.After(incident.Start) && (incident.End == nil || a.Time.Before(*incident.End) || a.Time.Equal(*incident.End)) {
 			actions = append(actions, &action)
 		}
 	}
-	fmt.Println(len(actions), incident.Start, incident.End)
 	return incident, list, actions, nil
 }
 
